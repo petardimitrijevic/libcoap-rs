@@ -25,7 +25,7 @@ use libcoap_sys::{
 };
 
 #[cfg(feature = "dtls")]
-use crate::crypto::{dtls_server_id_callback, dtls_server_sni_callback, CoapServerCryptoProvider};
+use crate::crypto::dtls_psk::{dtls_server_id_callback, dtls_server_sni_callback, CoapServerCryptoProvider};
 #[cfg(feature = "dtls")]
 use crate::crypto::{CoapCryptoProviderResponse, CoapCryptoPskIdentity, CoapCryptoPskInfo};
 use crate::event::{event_handler_callback, CoapEventHandler};

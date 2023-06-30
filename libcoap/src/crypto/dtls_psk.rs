@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * crypto.rs - CoAP cryptography provider interfaces and types.
+ * dtls_psk.rs - CoAP cryptography provider interfaces and types for DTLS PSK.
  * This file is part of the libcoap-rs crate, see the README and LICENSE files for
  * more information and terms of use.
  * Copyright © 2021-2023 The NAMIB Project Developers, all rights reserved.
  * See the README as well as the LICENSE file for more information.
  */
 
-//! Cryptography provider interfaces and types
+//! Cryptography provider interfaces and types for DTLS PSK
 
 use std::{
     ffi::{c_void, CStr},
@@ -130,10 +130,8 @@ pub trait CoapServerCryptoProvider: Debug {
     fn provide_default_info(&mut self) -> CoapCryptoPskInfo;
 }
 
-// TODO DTLS PKI/RPK
-
 #[cfg(feature = "dtls")]
-pub(crate) unsafe extern "C" fn dtls_ih_callback(
+pub unsafe extern "C" fn dtls_ih_callback(
     hint: *mut coap_str_const_t,
     session: *mut coap_session_t,
     _userdata: *mut c_void,
@@ -147,7 +145,7 @@ pub(crate) unsafe extern "C" fn dtls_ih_callback(
 }
 
 #[cfg(feature = "dtls")]
-pub(crate) unsafe extern "C" fn dtls_server_id_callback(
+pub unsafe extern "C" fn dtls_server_id_callback(
     identity: *mut coap_bin_const_t,
     session: *mut coap_session_t,
     userdata: *mut c_void,
@@ -160,7 +158,7 @@ pub(crate) unsafe extern "C" fn dtls_server_id_callback(
 }
 
 #[cfg(feature = "dtls")]
-pub(crate) unsafe extern "C" fn dtls_server_sni_callback(
+pub unsafe extern "C" fn dtls_server_sni_callback(
     sni: *const c_char,
     _session: *mut coap_session_t,
     userdata: *mut c_void,
