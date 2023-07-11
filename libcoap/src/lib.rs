@@ -136,14 +136,12 @@
 //!         //
 //!         // The provided CoapResponse is already filled with the correct token to be
 //!         // interpreted as a response to the correct request by the client.
-//!         |completed: &mut (), session: &mut CoapServerSession, request: &CoapRequest, mut response: CoapResponse| {
+//!         |completed: &mut (), session: &mut CoapServerSession, request: &CoapRequest, mut response: &mut CoapResponse| {
 //!             // Set content of the response message to "Hello World!"
 //!             let data = Vec::<u8>::from("Hello World!".as_bytes());
 //!             response.set_data(Some(data));
 //!             // Set the response code to 2.00 "Content"
 //!             response.set_code(CoapResponseCode::Content);
-//!             // Send the response message.
-//!             session.send(response).expect("Unable to send response");
 //!         },
 //!     )),
 //! );

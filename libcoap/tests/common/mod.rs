@@ -9,7 +9,6 @@
 
 use libcoap_rs::message::{CoapMessageCommon, CoapRequest, CoapResponse};
 use libcoap_rs::protocol::{CoapMessageCode, CoapMessageType, CoapRequestCode, CoapResponseCode};
-use libcoap_rs::session::CoapSessionCommon;
 use libcoap_rs::types::{CoapUri, CoapUriHost};
 use libcoap_rs::{CoapContext, CoapRequestHandler, CoapResource};
 use std::net::{SocketAddr, UdpSocket};
@@ -77,11 +76,11 @@ pub(crate) fn run_test_server<F: FnOnce(&mut CoapContext)>(context_configurator:
     resource.set_method_handler(
         CoapRequestCode::Get,
         Some(CoapRequestHandler::new(
-            |completed: &mut Rc<AtomicBool>, sess, _req, mut rsp: CoapResponse| {
+            |completed: &mut Rc<AtomicBool>, sess, _req, rsp: &mut CoapResponse| {
                 let data = Vec::<u8>::from("Hello World!".as_bytes());
                 rsp.set_data(Some(data));
                 rsp.set_code(CoapMessageCode::Response(CoapResponseCode::Content));
-                sess.send(rsp).unwrap();
+
                 completed.store(true, Ordering::Relaxed);
             },
         )),
