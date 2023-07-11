@@ -146,7 +146,6 @@ impl CoapClientSession<'_> {
         })
     }
 
-
     /// Create a new unencrypted session with the given peer over TCP.
     ///
     /// # Errors

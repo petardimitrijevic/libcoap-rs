@@ -20,19 +20,19 @@ use std::{
 use libc::c_int;
 
 use libcoap_sys::{
-    coap_delete_resource, coap_new_str_const, coap_pdu_t,
-    coap_pdu_type_t::COAP_MESSAGE_RST, coap_register_request_handler, coap_resource_get_uri_path,
-    coap_resource_get_userdata, coap_resource_init, coap_resource_notify_observers, coap_resource_set_get_observable,
-    coap_resource_set_mode, coap_resource_set_userdata, coap_resource_t, coap_send_rst, coap_session_t,
-    coap_string_t, COAP_RESOURCE_FLAGS_NOTIFY_CON, COAP_RESOURCE_FLAGS_NOTIFY_NON, COAP_RESOURCE_FLAGS_RELEASE_URI,
+    coap_delete_resource, coap_new_str_const, coap_pdu_t, coap_pdu_type_t::COAP_MESSAGE_RST,
+    coap_register_request_handler, coap_resource_get_uri_path, coap_resource_get_userdata, coap_resource_init,
+    coap_resource_notify_observers, coap_resource_set_get_observable, coap_resource_set_mode,
+    coap_resource_set_userdata, coap_resource_t, coap_send_rst, coap_session_t, coap_string_t,
+    COAP_RESOURCE_FLAGS_NOTIFY_CON, COAP_RESOURCE_FLAGS_NOTIFY_NON, COAP_RESOURCE_FLAGS_RELEASE_URI,
 };
 
+use crate::mem::{CoapFfiRcCell, DropInnerExclusively};
 use crate::message::request::CoapRequest;
 use crate::message::response::CoapResponse;
 use crate::message::CoapMessageCommon;
 use crate::protocol::CoapMessageCode;
 use crate::protocol::CoapMessageType;
-use crate::mem::{CoapFfiRcCell, DropInnerExclusively};
 
 use crate::session::CoapServerSession;
 use crate::session::CoapSessionCommon;
@@ -269,7 +269,9 @@ impl<D: Any + ?Sized + Debug> CoapResource<D> {
             _ => {
                 rsp_message.set_type_(CoapMessageType::Rst);
                 // TODO some better error handling
-                session.send(rsp_message.clone()).expect("error while sending RST packet");
+                session
+                    .send(rsp_message.clone())
+                    .expect("error while sending RST packet");
                 return;
             },
         };
@@ -350,8 +352,6 @@ impl<D: Any + ?Sized + Debug> Drop for CoapResourceInner<D> {
 ///
 /// # Creating a CoapRequestHandler
 /// There are multiple ways to create a [CoapRequestHandler]:
-/// - Using the [resource_handler!] macro: Preferred for handlers with a static lifetime (i.e.,
-///   function pointers, not closures).
 /// - Using [CoapRequestHandler::new]: Preferred for closures if you don't need access to the
 ///   [CoapResource] itself (but can be used for function pointers as well).
 /// - Using [CoapRequestHandler::new_resource_ref]: Preferred for closures if you need access to
@@ -413,7 +413,7 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
             raw_resource: *mut coap_resource_t,
             raw_session: *mut coap_session_t,
             raw_incoming_pdu: *const coap_pdu_t,
-            query: *const coap_string_t,
+            _query: *const coap_string_t, // TODO: Pass the parameter to handler function
             raw_response_pdu: *mut coap_pdu_t,
         ) {
             let resource_tmp = CoapFfiRcCell::clone_raw_weak(coap_resource_get_userdata(raw_resource));
@@ -429,7 +429,10 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
 
                 resource.call_dynamic_handler(&mut session, &request, &mut response);
 
-                if let Err(_) = response.into_message().apply_to_raw_pdu(raw_response_pdu, &session, false) {
+                if let Err(_) = response
+                    .into_message()
+                    .apply_to_raw_pdu(raw_response_pdu, &session, false)
+                {
                     err = true;
                 }
             }
