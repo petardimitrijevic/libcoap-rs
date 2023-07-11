@@ -41,46 +41,16 @@ use crate::{error::MessageConversionError, message::CoapMessage, protocol::CoapR
 // Trait aliases are experimental
 //trait CoapMethodHandlerFn<D> = FnMut(&D, &mut CoapSession, &CoapRequestMessage, &mut CoapResponseMessage);
 
-// Some macro wizardry to statically wrap request handlers.
-/// Create a CoapRequestHandler using the provided function.
-///
-/// This macro cannot be used if the intended handler function does not have a 'static lifetime,
-/// i.e. if the handler function is a closure.
-/// In these cases, use [CoapRequestHandler::new()] instead.
-#[macro_export]
-macro_rules! resource_handler {
-    ($f:ident, $t:path) => {{
-        #[allow(clippy::unnecessary_mut_passed)] // We don't know whether the function needs a mutable reference or not.
-        unsafe extern "C" fn _coap_method_handler_wrapper<D: Any + ?Sized + Debug>(
-            resource: *mut coap_resource_t,
-            session: *mut coap_session_t,
-            incoming_pdu: *const coap_pdu_t,
-            query: *const coap_string_t,
-            response_pdu: *mut coap_pdu_t,
-        ) {
-            let handler_data =
-                prepare_resource_handler_data::<$t>(resource, session, incoming_pdu, query, response_pdu);
-            if let Ok((mut resource, mut session, incoming_pdu, outgoing_pdu)) = handler_data {
-                ($f::<D>)(&mut resource, &mut session, &incoming_pdu, outgoing_pdu)
-            }
-        }
-        unsafe { CoapRequestHandler::<$t>::from_raw_handler(_coap_method_handler_wrapper::<$t>) }
-    }};
-}
-
 /// Converts the raw parameters provided to a request handler into the appropriate wrapped types.
 ///
 /// If an error occurs while parsing the resource data, this function will send an RST message to the
 /// client and return a [MessageConversionError].
 ///
-/// This function is not intended for public use, the only reason it is public is that the
-/// [resource_handler!] macro requires this function.
-///
 /// # Safety
 /// The provided pointers must all be valid and point to the appropriate data structures.
 #[inline]
 #[doc(hidden)]
-pub unsafe fn prepare_resource_handler_data<'a, D: Any + ?Sized + Debug>(
+unsafe fn prepare_resource_handler_data<'a, D: Any + ?Sized + Debug>(
     raw_resource: *mut coap_resource_t,
     raw_session: *mut coap_session_t,
     raw_incoming_pdu: *const coap_pdu_t,
@@ -180,35 +150,35 @@ impl<D: Any + ?Sized + Debug> CoapResourceHandlers<D> {
         }
     }
 
-    #[inline]
-    // Clippy complains about this being unused, but I'd like to keep it for consistency.
-    #[allow(unused)]
-    fn handler_mut(&mut self, code: CoapRequestCode) -> Option<&mut CoapRequestHandler<D>> {
-        match code {
-            CoapRequestCode::Get => self.get.as_mut(),
-            CoapRequestCode::Put => self.put.as_mut(),
-            CoapRequestCode::Delete => self.delete.as_mut(),
-            CoapRequestCode::Post => self.post.as_mut(),
-            CoapRequestCode::Fetch => self.fetch.as_mut(),
-            CoapRequestCode::IPatch => self.ipatch.as_mut(),
-            CoapRequestCode::Patch => self.patch.as_mut(),
-        }
-    }
+    // #[inline]
+    // // Clippy complains about this being unused, but I'd like to keep it for consistency.
+    // #[allow(unused)]
+    // fn handler_mut(&mut self, code: CoapRequestCode) -> Option<&mut CoapRequestHandler<D>> {
+    //     match code {
+    //         CoapRequestCode::Get => self.get.as_mut(),
+    //         CoapRequestCode::Put => self.put.as_mut(),
+    //         CoapRequestCode::Delete => self.delete.as_mut(),
+    //         CoapRequestCode::Post => self.post.as_mut(),
+    //         CoapRequestCode::Fetch => self.fetch.as_mut(),
+    //         CoapRequestCode::IPatch => self.ipatch.as_mut(),
+    //         CoapRequestCode::Patch => self.patch.as_mut(),
+    //     }
+    // }
 
     // Kept for consistency
-    #[allow(unused)]
-    #[inline]
-    fn handler_ref(&self, code: CoapRequestCode) -> &Option<CoapRequestHandler<D>> {
-        match code {
-            CoapRequestCode::Get => &self.get,
-            CoapRequestCode::Put => &self.put,
-            CoapRequestCode::Delete => &self.delete,
-            CoapRequestCode::Post => &self.post,
-            CoapRequestCode::Fetch => &self.fetch,
-            CoapRequestCode::IPatch => &self.ipatch,
-            CoapRequestCode::Patch => &self.patch,
-        }
-    }
+    // #[allow(unused)]
+    // #[inline]
+    // fn handler_ref(&self, code: CoapRequestCode) -> &Option<CoapRequestHandler<D>> {
+    //     match code {
+    //         CoapRequestCode::Get => &self.get,
+    //         CoapRequestCode::Put => &self.put,
+    //         CoapRequestCode::Delete => &self.delete,
+    //         CoapRequestCode::Post => &self.post,
+    //         CoapRequestCode::Fetch => &self.fetch,
+    //         CoapRequestCode::IPatch => &self.ipatch,
+    //         CoapRequestCode::Patch => &self.patch,
+    //     }
+    // }
 
     #[inline]
     fn handler_ref_mut(&mut self, code: CoapRequestCode) -> &mut Option<CoapRequestHandler<D>> {
@@ -468,36 +438,24 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
     >(
         handler: F,
     ) -> CoapRequestHandler<D> {
-        let mut wrapped_handler = resource_handler!(coap_resource_handler_dynamic_wrapper, D);
-        wrapped_handler.dynamic_handler_function = Some(Box::new(handler));
-        wrapped_handler
-    }
-
-    /// Creates a new request handler using the given raw handler function.
-    ///
-    /// The handler function provided here is called directly by libcoap.
-    ///
-    /// # Safety
-    /// The handler function must not modify the user data value inside of the provided raw resource
-    /// in a way that would break normal handler functions. Also, neither the resource nor the
-    /// session may be freed by calling `coap_delete_resource` or `coap_session_release`.
-    // We'll allow the complex type as trait aliases are experimental and we'll probably want to use
-    // those instead of aliasing the entire type including wrappers.
-    #[allow(clippy::type_complexity)]
-    pub unsafe fn from_raw_handler(
-        raw_handler: unsafe extern "C" fn(
+        #[allow(clippy::unnecessary_mut_passed)] // We don't know whether the function needs a mutable reference or not.
+        unsafe extern "C" fn _coap_method_handler_wrapper<D: Any + ?Sized + Debug>(
             resource: *mut coap_resource_t,
             session: *mut coap_session_t,
             incoming_pdu: *const coap_pdu_t,
             query: *const coap_string_t,
             response_pdu: *mut coap_pdu_t,
-        ),
-    ) -> CoapRequestHandler<D> {
-        let handler_fn: Option<Box<dyn FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, CoapResponse)>> =
-            None;
+        ) {
+            let handler_data =
+                prepare_resource_handler_data::<D>(resource, session, incoming_pdu, query, response_pdu);
+            if let Ok((resource, mut session, incoming_pdu, outgoing_pdu)) = handler_data {
+                resource.call_dynamic_handler(&mut session, &incoming_pdu, outgoing_pdu);
+            }
+        }
+
         CoapRequestHandler {
-            raw_handler,
-            dynamic_handler_function: handler_fn,
+            raw_handler: _coap_method_handler_wrapper::<D>,
+            dynamic_handler_function: Some(Box::new(handler)),
             __handler_data_type: PhantomData,
         }
     }
@@ -507,13 +465,4 @@ impl<D: 'static + ?Sized + Debug> Debug for CoapRequestHandler<D> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CoapRequestHandler").finish()
     }
-}
-
-fn coap_resource_handler_dynamic_wrapper<D: Any + ?Sized + Debug>(
-    resource: &CoapResource<D>,
-    session: &mut CoapServerSession,
-    req_message: &CoapRequest,
-    rsp_message: CoapResponse,
-) {
-    resource.call_dynamic_handler(session, req_message, rsp_message);
 }
