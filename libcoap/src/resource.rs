@@ -41,36 +41,6 @@ use crate::{error::MessageConversionError, message::CoapMessage, protocol::CoapR
 // Trait aliases are experimental
 //trait CoapMethodHandlerFn<D> = FnMut(&D, &mut CoapSession, &CoapRequestMessage, &mut CoapResponseMessage);
 
-/// Converts the raw parameters provided to a request handler into the appropriate wrapped types.
-///
-/// If an error occurs while parsing the resource data, this function will send an RST message to the
-/// client and return a [MessageConversionError].
-///
-/// # Safety
-/// The provided pointers must all be valid and point to the appropriate data structures.
-#[inline]
-#[doc(hidden)]
-unsafe fn prepare_resource_handler_data<'a, D: Any + ?Sized + Debug>(
-    raw_resource: *mut coap_resource_t,
-    raw_session: *mut coap_session_t,
-    raw_incoming_pdu: *const coap_pdu_t,
-    _raw_query: *const coap_string_t,
-    raw_response_pdu: *mut coap_pdu_t,
-) -> Result<(CoapResource<D>, CoapServerSession<'a>, CoapRequest, CoapResponse), MessageConversionError> {
-    let resource_tmp = CoapFfiRcCell::clone_raw_weak(coap_resource_get_userdata(raw_resource));
-    let resource = CoapResource::from(resource_tmp);
-    let session = CoapServerSession::from_raw(raw_session);
-    let request = CoapMessage::from_raw_pdu(raw_incoming_pdu).and_then(CoapRequest::from_message);
-    let response = CoapMessage::from_raw_pdu(raw_response_pdu).and_then(CoapResponse::from_message);
-    match (request, response) {
-        (Ok(request), Ok(response)) => Ok((resource, session, request, response)),
-        (v1, v2) => {
-            coap_send_rst(raw_session, raw_incoming_pdu, COAP_MESSAGE_RST);
-            Err(v1.and(v2).err().unwrap())
-        },
-    }
-}
-
 /// Trait with functions relating to [CoapResource]s with an unknown data type.
 pub trait UntypedCoapResource: Any + Debug {
     /// Returns the uri_path this resource responds to.
@@ -440,16 +410,22 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
     ) -> CoapRequestHandler<D> {
         #[allow(clippy::unnecessary_mut_passed)] // We don't know whether the function needs a mutable reference or not.
         unsafe extern "C" fn _coap_method_handler_wrapper<D: Any + ?Sized + Debug>(
-            resource: *mut coap_resource_t,
-            session: *mut coap_session_t,
-            incoming_pdu: *const coap_pdu_t,
+            raw_resource: *mut coap_resource_t,
+            raw_session: *mut coap_session_t,
+            raw_incoming_pdu: *const coap_pdu_t,
             query: *const coap_string_t,
-            response_pdu: *mut coap_pdu_t,
+            raw_response_pdu: *mut coap_pdu_t,
         ) {
-            let handler_data =
-                prepare_resource_handler_data::<D>(resource, session, incoming_pdu, query, response_pdu);
-            if let Ok((resource, mut session, incoming_pdu, outgoing_pdu)) = handler_data {
-                resource.call_dynamic_handler(&mut session, &incoming_pdu, outgoing_pdu);
+            let resource_tmp = CoapFfiRcCell::clone_raw_weak(coap_resource_get_userdata(raw_resource));
+            let resource = CoapResource::<D>::from(resource_tmp);
+            let mut session = CoapServerSession::from_raw(raw_session);
+            let request = CoapMessage::from_raw_pdu(raw_incoming_pdu).and_then(CoapRequest::from_message);
+            let response = CoapMessage::from_raw_pdu(raw_response_pdu).and_then(CoapResponse::from_message);
+
+            if let (Ok(request), Ok(response)) = (request, response) {
+                resource.call_dynamic_handler(&mut session, &request, response);
+            } else {
+                coap_send_rst(raw_session, raw_incoming_pdu, COAP_MESSAGE_RST);
             }
         }
 
