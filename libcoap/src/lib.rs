@@ -188,7 +188,9 @@ mod resource;
 pub mod session;
 pub mod transport;
 pub mod types;
+mod utils;
 
 pub use context::CoapContext;
 pub use event::CoapEventHandler;
 pub use resource::{CoapRequestHandler, CoapResource};
+pub use utils::{coap_set_log_level, CoapLogLevel};
