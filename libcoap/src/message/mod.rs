@@ -373,7 +373,7 @@ impl CoapMessage {
         }
         // SAFETY: We just checked that pdu is a valid pointer.
         unsafe {
-            let result = self.apply_to_raw_pdu(pdu, session);
+            let result = self.apply_to_raw_pdu(pdu, session, true);
             if result.is_err() {
                 coap_delete_pdu(pdu);
             }
@@ -387,6 +387,8 @@ impl CoapMessage {
     /// function calls [coap_add_token()](libcoap_sys::coap_add_token()), any pre-added options and
     /// data will probably be destroyed.
     ///
+    /// The token is only copied if copy_token is true.
+    ///
     /// If you don't have a raw pdu instance, use [CoapMessage::into_raw_pdu()] instead of this
     /// function.
     ///
@@ -399,15 +401,21 @@ impl CoapMessage {
         mut self,
         raw_pdu: *mut coap_pdu_t,
         session: &S,
+        copy_token: bool,
     ) -> Result<*mut coap_pdu_t, MessageConversionError> {
         assert!(!raw_pdu.is_null(), "attempted to apply CoapMessage to null pointer");
         coap_pdu_set_type(raw_pdu, self.type_.to_raw_pdu_type());
         coap_pdu_set_code(raw_pdu, self.code.to_raw_pdu_code());
+
         let message = self.as_message_mut();
-        let token: &[u8] = message.token.as_ref().ok_or(MessageConversionError::MissingToken)?;
-        if coap_add_token(raw_pdu, token.len(), token.as_ptr()) == 0 {
-            return Err(MessageConversionError::Unknown);
+
+        if copy_token {
+            let token: &[u8] = message.token.as_ref().ok_or(MessageConversionError::MissingToken)?;
+            if coap_add_token(raw_pdu, token.len(), token.as_ptr()) == 0 {
+                return Err(MessageConversionError::Unknown);
+            }
         }
+
         let mut optlist = None;
         let option_iter = std::mem::take(&mut message.options).into_iter();
         for option in option_iter {
