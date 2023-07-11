@@ -9,6 +9,7 @@
 
 //! Module containing context-internal types and traits.
 
+use std::collections::HashMap;
 use std::{any::Any, ffi::c_void, fmt::Debug, marker::PhantomData, net::SocketAddr, ops::Sub, time::Duration};
 
 use libc::c_uint;
@@ -20,8 +21,9 @@ use libcoap_sys::{
     coap_context_set_csm_timeout, coap_context_set_keepalive, coap_context_set_max_handshake_sessions,
     coap_context_set_max_idle_sessions, coap_context_set_psk2, coap_context_set_session_timeout, coap_context_t,
     coap_dtls_spsk_info_t, coap_dtls_spsk_t, coap_event_t, coap_free_context, coap_get_app_data, coap_io_process,
-    coap_new_context, coap_proto_t, coap_register_event_handler, coap_register_response_handler, coap_set_app_data,
-    COAP_BLOCK_SINGLE_BODY, COAP_BLOCK_USE_LIBCOAP, COAP_DTLS_SPSK_SETUP_VERSION, COAP_IO_WAIT,
+    coap_new_context, coap_proto_t, coap_register_event_handler, coap_register_response_handler,
+    coap_resource_notify_observers, coap_set_app_data, COAP_BLOCK_SINGLE_BODY, COAP_BLOCK_USE_LIBCOAP,
+    COAP_DTLS_SPSK_SETUP_VERSION, COAP_IO_WAIT,
 };
 
 #[cfg(feature = "dtls")]
@@ -50,8 +52,9 @@ struct CoapContextInner<'a> {
     raw_context: *mut coap_context_t,
     /// A list of endpoints that this context is currently associated with.
     endpoints: Vec<CoapEndpoint>,
+    next_resource_id: u32,
     /// A list of resources associated with this context.
-    resources: Vec<Box<dyn UntypedCoapResource>>,
+    resources: HashMap<u32, Box<dyn UntypedCoapResource>>,
     /// A list of server-side sessions that are currently active.
     server_sessions: Vec<CoapServerSession<'a>>,
     /// The event handler responsible for library-user side handling of events.
@@ -108,7 +111,8 @@ impl<'a> CoapContext<'a> {
         let inner = CoapLendableFfiRcCell::new(CoapContextInner {
             raw_context,
             endpoints: Vec::new(),
-            resources: Vec::new(),
+            next_resource_id: 1,
+            resources: HashMap::new(),
             server_sessions: Vec::new(),
             event_handler: None,
             #[cfg(feature = "dtls")]
@@ -265,17 +269,36 @@ impl CoapContext<'_> {
     }
 
     /// Adds the given resource to the resource pool of this context.
-    pub fn add_resource<D: Any + ?Sized + Debug>(&mut self, res: CoapResource<D>) {
+    pub fn add_resource<D: Any + ?Sized + Debug>(&mut self, res: CoapResource<D>) -> u32 {
         let mut inner_ref = self.inner.borrow_mut();
-        inner_ref.resources.push(Box::new(res));
+        let resource_id = inner_ref.next_resource_id;
+        inner_ref.next_resource_id += 1;
+
+        let mut resource_ptr = Box::new(res);
+
         // SAFETY: raw context is valid, raw resource is also guaranteed to be valid as long as
         // contract of CoapResource is upheld.
         unsafe {
-            coap_add_resource(
-                inner_ref.raw_context,
-                inner_ref.resources.last_mut().unwrap().raw_resource(),
-            );
+            coap_add_resource(inner_ref.raw_context, resource_ptr.raw_resource());
         };
+
+        inner_ref.resources.insert(resource_id, resource_ptr);
+        resource_id
+    }
+
+    /// Notify observers associated with the given resource_id
+    /// Currently this function doesn't support the query parameter
+    pub fn notify_observers(&mut self, resource_id: u32) {
+        let mut inner_ref = self.inner.borrow_mut();
+
+        let mut r = inner_ref.resources.get_mut(&resource_id);
+        let q = r.as_mut().unwrap();
+
+        // TODO: Support the query parameter
+
+        unsafe {
+            coap_resource_notify_observers(q.raw_resource(), std::ptr::null());
+        }
     }
 
     /// Sets the server-side cryptography information provider.
@@ -669,9 +692,9 @@ impl Drop for CoapContextInner<'_> {
         // As long as [CoapResource::into_inner] isn't used and we haven't given out owned
         // CoapResource instances whose raw resource is attached to the raw context, this should
         // never fail.
-        std::mem::take(&mut self.resources)
-            .into_iter()
-            .for_each(UntypedCoapResource::drop_inner_exclusive);
+        for (_k, v) in std::mem::take(&mut self.resources) {
+            UntypedCoapResource::drop_inner_exclusive(v);
+        }
         // SAFETY: We have already dropped all endpoints and contexts which could be freed alongside
         // the actual context, and our raw context reference is valid (as long as the contracts of
         // [as_mut_raw_context()] and [as_mut_context()] are fulfilled).
