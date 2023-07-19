@@ -420,6 +420,11 @@ impl CoapMessage {
         let option_iter = std::mem::take(&mut message.options).into_iter();
         for option in option_iter {
             let optnum = option.number();
+
+            if optnum == CoapOptionType::Observe as u16 {
+                continue;
+            }
+
             let entry = option
                 .into_optlist_entry()
                 .map_err(|e| MessageConversionError::InvalidOptionValue(CoapOptionType::try_from(optnum).ok(), e))?;
