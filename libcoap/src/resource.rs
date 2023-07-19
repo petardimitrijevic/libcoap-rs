@@ -221,7 +221,12 @@ impl<D: Any + ?Sized + Debug> CoapResource<D> {
     /// non-confirmable CoAP messages.
     pub fn set_observe_notify_confirmable(&self, confirmable: bool) {
         // SAFETY: Resource is valid as long as CoapResourceInner exists, query is currently unused.
-        unsafe { coap_resource_set_mode(self.inner.borrow_mut().raw_resource, confirmable as c_int) }
+        unsafe {
+            coap_resource_set_mode(
+                self.inner.borrow_mut().raw_resource,
+                if confirmable { 0x02 } else { 0x00 },
+            )
+        }
     }
 
     /// Returns the user data associated with this resource.
