@@ -294,8 +294,8 @@ impl CoapContext<'_> {
         let mut r = inner_ref.resources.get_mut(&resource_id);
         let q = r.as_mut().unwrap();
 
-        // TODO: Support the query parameter
-
+        // According to documentation the query parameter is obsolete and it is
+        // ignored
         unsafe {
             coap_resource_notify_observers(q.raw_resource(), std::ptr::null());
         }
