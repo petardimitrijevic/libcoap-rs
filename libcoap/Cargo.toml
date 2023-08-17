@@ -17,7 +17,7 @@ categories = ["api-bindings", "network-programming", "embedded"]
 keywords = ["coap", "libcoap"]
 
 [features]
-default = ["dtls", "tcp", "dtls_openssl"]
+default = ["dtls", "tcp"]                             # "dtls_openssl"]
 dtls = ["libcoap-sys/dtls"]
 dtls_tinydtls = ["libcoap-sys/dtls_backend_tinydtls"]
 dtls_openssl = ["libcoap-sys/dtls_backend_openssl"]
@@ -30,7 +30,7 @@ vendored = ["libcoap-sys/vendored"]
 [dependencies]
 libcoap-sys = { version = "^0.2.2", path = "../libcoap-sys" }
 libc = { version = "^0.2.95" }
-num-derive = { version = "^0.3.3" }
+num-derive = { version = "^0.4.0" }
 num-traits = { version = "^0.2.14" }
 url = { version = "^2.2" }
 rand = { version = "^0.8.4" }
