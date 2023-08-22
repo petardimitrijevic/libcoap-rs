@@ -15,6 +15,7 @@ use std::{
     cell::RefMut,
     fmt::{Debug, Formatter},
     marker::PhantomData,
+    slice,
 };
 
 use libc::c_int;
@@ -267,6 +268,7 @@ impl<D: Any + ?Sized + Debug> CoapResource<D> {
         session: &mut CoapServerSession,
         req_message: &CoapRequest,
         rsp_message: &mut CoapResponse,
+        query: Option<&[u8]>,
     ) {
         let mut inner = self.inner.borrow_mut();
         let req_code = match req_message.code() {
@@ -298,6 +300,7 @@ impl<D: Any + ?Sized + Debug> CoapResource<D> {
             session,
             req_message,
             rsp_message,
+            query,
         );
 
         // Put the handler function back into the resource, unless the handler was replaced.
@@ -387,18 +390,19 @@ pub struct CoapRequestHandler<D: Any + ?Sized + Debug> {
         query: *const coap_string_t,
         response_pdu: *mut coap_pdu_t,
     ),
-    dynamic_handler_function:
-        Option<Box<dyn FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse)>>,
+    dynamic_handler_function: Option<
+        Box<dyn FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&[u8]>)>,
+    >,
     __handler_data_type: PhantomData<D>,
 }
 
 impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
     /// Creates a new CoapResourceHandler with the given function as the handler function to call.
-    pub fn new<F: 'static + FnMut(&mut D, &mut CoapServerSession, &CoapRequest, &mut CoapResponse)>(
+    pub fn new<F: 'static + FnMut(&mut D, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&[u8]>)>(
         mut handler: F,
     ) -> CoapRequestHandler<D> {
-        CoapRequestHandler::new_resource_ref(move |resource, session, request, mut response| {
-            handler(&mut *resource.user_data_mut(), session, request, &mut response)
+        CoapRequestHandler::new_resource_ref(move |resource, session, request, response, query| {
+            handler(&mut *resource.user_data_mut(), session, request, response, query)
         })
     }
 
@@ -409,7 +413,7 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
     /// `CoapResource`. This way, you can perform actions on the resource directly (e.g., notify
     /// observers).
     pub fn new_resource_ref<
-        F: 'static + FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse),
+        F: 'static + FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&[u8]>),
     >(
         handler: F,
     ) -> CoapRequestHandler<D> {
@@ -418,7 +422,7 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
             raw_resource: *mut coap_resource_t,
             raw_session: *mut coap_session_t,
             raw_incoming_pdu: *const coap_pdu_t,
-            _query: *const coap_string_t, // TODO: Pass the parameter to handler function
+            query: *const coap_string_t,
             raw_response_pdu: *mut coap_pdu_t,
         ) {
             let resource_tmp = CoapFfiRcCell::clone_raw_weak(coap_resource_get_userdata(raw_resource));
@@ -426,21 +430,22 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
             let mut session = CoapServerSession::from_raw(raw_session);
             let request = CoapMessage::from_raw_pdu(raw_incoming_pdu).and_then(CoapRequest::from_message);
             let response = CoapMessage::from_raw_pdu(raw_response_pdu).and_then(CoapResponse::from_message);
+            let query = if query.is_null() {
+                None
+            } else {
+                Some(slice::from_raw_parts((*query).s, (*query).length))
+            };
 
-            let mut err = true;
+            let err = if let (Ok(request), Ok(mut response)) = (request, response) {
+                resource.call_dynamic_handler(&mut session, &request, &mut response, query);
 
-            if let (Ok(request), Ok(mut response)) = (request, response) {
-                err = false;
-
-                resource.call_dynamic_handler(&mut session, &request, &mut response);
-
-                if let Err(_) = response
+                response
                     .into_message()
                     .apply_to_raw_pdu(raw_response_pdu, &session, false)
-                {
-                    err = true;
-                }
-            }
+                    .is_err()
+            } else {
+                true
+            };
 
             // TODO: If error occurs send reset message?
             if err {
