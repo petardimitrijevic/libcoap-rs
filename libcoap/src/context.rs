@@ -45,7 +45,7 @@ use crate::{
     session::session_response_handler,
 };
 
-use crate::transport::CoapEndpoint;
+use crate::transport::{CoapEndpoint, EndpointMtu};
 
 #[derive(Debug)]
 struct CoapContextInner<'a> {
@@ -240,8 +240,17 @@ impl CoapContext<'_> {
     }
 
     /// Store reference to the endpoint
-    fn add_endpoint(&mut self, addr: SocketAddr, proto: coap_proto_t) -> Result<(), EndpointCreationError> {
-        let endpoint = CoapEndpoint::new_endpoint(self, addr, proto)?;
+    fn add_endpoint(
+        &mut self,
+        addr: SocketAddr,
+        proto: coap_proto_t,
+        mtu: Option<EndpointMtu>,
+    ) -> Result<(), EndpointCreationError> {
+        let mut endpoint = CoapEndpoint::new_endpoint(self, addr, proto)?;
+
+        if let Some(mtu_size) = mtu {
+            endpoint.set_default_mtu(mtu_size);
+        }
 
         let mut inner_ref = self.inner.borrow_mut();
         inner_ref.endpoints.push(endpoint);
@@ -249,14 +258,22 @@ impl CoapContext<'_> {
     }
 
     /// Creates a new UDP endpoint that is bound to the given address.
-    pub fn add_endpoint_udp(&mut self, addr: SocketAddr) -> Result<(), EndpointCreationError> {
-        self.add_endpoint(addr, coap_proto_t::COAP_PROTO_UDP)
+    pub fn add_endpoint_udp(
+        &mut self,
+        addr: SocketAddr,
+        mtu: Option<EndpointMtu>,
+    ) -> Result<(), EndpointCreationError> {
+        self.add_endpoint(addr, coap_proto_t::COAP_PROTO_UDP, mtu)
     }
 
     /// Creates a new TCP endpoint that is bound to the given address.
     #[cfg(feature = "tcp")]
-    pub fn add_endpoint_tcp(&mut self, addr: SocketAddr) -> Result<(), EndpointCreationError> {
-        self.add_endpoint(addr, coap_proto_t::COAP_PROTO_TCP)
+    pub fn add_endpoint_tcp(
+        &mut self,
+        addr: SocketAddr,
+        mtu: Option<EndpointMtu>,
+    ) -> Result<(), EndpointCreationError> {
+        self.add_endpoint(addr, coap_proto_t::COAP_PROTO_TCP, mtu)
     }
 
     /// Creates a new DTLS endpoint that is bound to the given address.
@@ -264,13 +281,21 @@ impl CoapContext<'_> {
     /// Note that in order to actually connect to DTLS clients, you need to set a crypto provider
     /// using [set_server_crypto_provider()](CoapContext::set_server_crypto_provider())
     #[cfg(feature = "dtls")]
-    pub fn add_endpoint_dtls(&mut self, addr: SocketAddr) -> Result<(), EndpointCreationError> {
-        self.add_endpoint(addr, coap_proto_t::COAP_PROTO_DTLS)
+    pub fn add_endpoint_dtls(
+        &mut self,
+        addr: SocketAddr,
+        mtu: Option<EndpointMtu>,
+    ) -> Result<(), EndpointCreationError> {
+        self.add_endpoint(addr, coap_proto_t::COAP_PROTO_DTLS, mtu)
     }
 
     /// TODO
     #[cfg(all(feature = "tcp", feature = "dtls"))]
-    pub fn add_endpoint_tls(&mut self, _addr: SocketAddr) -> Result<(), EndpointCreationError> {
+    pub fn add_endpoint_tls(
+        &mut self,
+        _addr: SocketAddr,
+        mtu: Option<EndpointMtu>,
+    ) -> Result<(), EndpointCreationError> {
         todo!()
         // TODO: self.add_endpoint(addr, coap_proto_t::COAP_PROTO_TLS)
     }
