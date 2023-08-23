@@ -30,6 +30,7 @@ use libcoap_sys::{
 use crate::crypto::{dtls_server_id_callback, dtls_server_sni_callback, CoapServerCryptoProvider};
 #[cfg(feature = "dtls")]
 use crate::crypto::{CoapCryptoProviderResponse, CoapCryptoPskIdentity, CoapCryptoPskInfo};
+
 use crate::event::{event_handler_callback, CoapEventHandler};
 use crate::mem::{CoapLendableFfiRcCell, CoapLendableFfiWeakCell, DropInnerExclusively};
 
@@ -230,6 +231,12 @@ impl CoapContext<'_> {
             remaining_time = remaining_time.map(|v| v.sub(spent_time));
         }
         Ok(())
+    }
+
+    /// Allow registration of application session handler
+    pub fn register_session_event_handler(&mut self, event_handler: Option<Box<dyn CoapEventHandler>>) {
+        let mut inner_ref = self.inner.borrow_mut();
+        inner_ref.event_handler = event_handler;
     }
 
     /// Store reference to the endpoint
