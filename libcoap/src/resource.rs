@@ -15,7 +15,7 @@ use std::{
     cell::RefMut,
     fmt::{Debug, Formatter},
     marker::PhantomData,
-    slice,
+    slice, str,
 };
 
 use libc::c_int;
@@ -268,7 +268,7 @@ impl<D: Any + ?Sized + Debug> CoapResource<D> {
         session: &mut CoapServerSession,
         req_message: &CoapRequest,
         rsp_message: &mut CoapResponse,
-        query: Option<&[u8]>,
+        query: Option<&str>,
     ) {
         let mut inner = self.inner.borrow_mut();
         let req_code = match req_message.code() {
@@ -390,15 +390,14 @@ pub struct CoapRequestHandler<D: Any + ?Sized + Debug> {
         query: *const coap_string_t,
         response_pdu: *mut coap_pdu_t,
     ),
-    dynamic_handler_function: Option<
-        Box<dyn FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&[u8]>)>,
-    >,
+    dynamic_handler_function:
+        Option<Box<dyn FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&str>)>>,
     __handler_data_type: PhantomData<D>,
 }
 
 impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
     /// Creates a new CoapResourceHandler with the given function as the handler function to call.
-    pub fn new<F: 'static + FnMut(&mut D, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&[u8]>)>(
+    pub fn new<F: 'static + FnMut(&mut D, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&str>)>(
         mut handler: F,
     ) -> CoapRequestHandler<D> {
         CoapRequestHandler::new_resource_ref(move |resource, session, request, response, query| {
@@ -413,7 +412,7 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
     /// `CoapResource`. This way, you can perform actions on the resource directly (e.g., notify
     /// observers).
     pub fn new_resource_ref<
-        F: 'static + FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&[u8]>),
+        F: 'static + FnMut(&CoapResource<D>, &mut CoapServerSession, &CoapRequest, &mut CoapResponse, Option<&str>),
     >(
         handler: F,
     ) -> CoapRequestHandler<D> {
@@ -433,7 +432,10 @@ impl<D: 'static + ?Sized + Debug> CoapRequestHandler<D> {
             let query = if query.is_null() {
                 None
             } else {
-                Some(slice::from_raw_parts((*query).s, (*query).length))
+                Some(str::from_utf8_unchecked(slice::from_raw_parts(
+                    (*query).s,
+                    (*query).length,
+                )))
             };
 
             let err = if let (Ok(request), Ok(mut response)) = (request, response) {
