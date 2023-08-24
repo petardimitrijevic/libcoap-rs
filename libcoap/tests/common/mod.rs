@@ -76,7 +76,7 @@ pub(crate) fn run_test_server<F: FnOnce(&mut CoapContext)>(context_configurator:
     resource.set_method_handler(
         CoapRequestCode::Get,
         Some(CoapRequestHandler::new(
-            |completed: &mut Rc<AtomicBool>, sess, _req, rsp: &mut CoapResponse| {
+            |completed: &mut Rc<AtomicBool>, sess, _req, rsp: &mut CoapResponse, _query: Option<&str>| {
                 let data = Vec::<u8>::from("Hello World!".as_bytes());
                 rsp.set_data(Some(data));
                 rsp.set_code(CoapMessageCode::Response(CoapResponseCode::Content));

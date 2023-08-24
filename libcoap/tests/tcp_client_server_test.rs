@@ -22,7 +22,8 @@ mod common;
 pub fn basic_client_server_request() {
     let server_address = common::get_unused_server_addr();
 
-    let server_handle = common::spawn_test_server(move |context| context.add_endpoint_tcp(server_address).unwrap());
+    let server_handle =
+        common::spawn_test_server(move |context| context.add_endpoint_tcp(server_address, None).unwrap());
 
     let mut context = CoapContext::new().unwrap();
     let session = CoapClientSession::connect_tcp(&mut context, server_address).unwrap();

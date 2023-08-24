@@ -119,7 +119,7 @@
 //!
 //! // a new CoAP context and bind to the generated SocketAddr.
 //! let mut context = CoapContext::new().expect("Failed to create CoAP context");
-//! context.add_endpoint_udp(server_address).expect("Unable to add/bind to endpoint");
+//! context.add_endpoint_udp(server_address, None).expect("Unable to add/bind to endpoint");
 //!
 //! // Create a new resource that is available at the URI path `hello_world`
 //! // The second argument can be used to provide any kind of user-specific data, which will
@@ -136,7 +136,7 @@
 //!         //
 //!         // The provided CoapResponse is already filled with the correct token to be
 //!         // interpreted as a response to the correct request by the client.
-//!         |completed: &mut (), session: &mut CoapServerSession, request: &CoapRequest, mut response: &mut CoapResponse| {
+//!         |completed: &mut (), session: &mut CoapServerSession, request: &CoapRequest, mut response: &mut CoapResponse, _query: Option<&str>| {
 //!             // Set content of the response message to "Hello World!"
 //!             let data = Vec::<u8>::from("Hello World!".as_bytes());
 //!             response.set_data(Some(data));

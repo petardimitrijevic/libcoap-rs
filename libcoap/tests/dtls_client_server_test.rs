@@ -67,7 +67,7 @@ pub fn dtls_client_server_request() {
 
     let server_handle = common::spawn_test_server(move |context| {
         context.set_server_crypto_provider(Some(Box::new(DummyCryptoProvider {})));
-        context.add_endpoint_dtls(server_address).unwrap();
+        context.add_endpoint_dtls(server_address, None).unwrap();
     });
 
     let mut context = CoapContext::new().unwrap();
