@@ -294,7 +294,7 @@ impl CoapContext<'_> {
     pub fn add_endpoint_tls(
         &mut self,
         _addr: SocketAddr,
-        mtu: Option<EndpointMtu>,
+        _mtu: Option<EndpointMtu>,
     ) -> Result<(), EndpointCreationError> {
         todo!()
         // TODO: self.add_endpoint(addr, coap_proto_t::COAP_PROTO_TLS)
