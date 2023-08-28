@@ -22,8 +22,8 @@ use libcoap_sys::{
     coap_context_set_max_idle_sessions, coap_context_set_psk2, coap_context_set_session_timeout, coap_context_t,
     coap_dtls_spsk_info_t, coap_dtls_spsk_t, coap_event_t, coap_free_context, coap_get_app_data, coap_io_process,
     coap_new_context, coap_proto_t, coap_register_event_handler, coap_register_response_handler,
-    coap_resource_notify_observers, coap_set_app_data, COAP_BLOCK_SINGLE_BODY, COAP_BLOCK_USE_LIBCOAP,
-    COAP_DTLS_SPSK_SETUP_VERSION, COAP_IO_WAIT,
+    coap_resource_notify_observers, coap_session_release, coap_set_app_data, COAP_BLOCK_SINGLE_BODY,
+    COAP_BLOCK_USE_LIBCOAP, COAP_DTLS_SPSK_SETUP_VERSION, COAP_IO_WAIT,
 };
 
 #[cfg(feature = "dtls")]
@@ -165,29 +165,31 @@ impl<'a> CoapContext<'a> {
 
     /// Handle an incoming event provided by libcoap.
     pub(crate) fn handle_event(&self, mut session: CoapSession<'a>, event: coap_event_t) {
+        use coap_event_t::*;
+
         let inner_ref = &mut *self.inner.borrow_mut();
         // Call event handler for event.
         if let Some(handler) = &mut inner_ref.event_handler {
             match event {
-                coap_event_t::COAP_EVENT_DTLS_CLOSED => handler.handle_dtls_closed(&mut session),
-                coap_event_t::COAP_EVENT_DTLS_CONNECTED => handler.handle_dtls_connected(&mut session),
-                coap_event_t::COAP_EVENT_DTLS_RENEGOTIATE => handler.handle_dtls_renegotiate(&mut session),
-                coap_event_t::COAP_EVENT_DTLS_ERROR => handler.handle_dtls_error(&mut session),
-                coap_event_t::COAP_EVENT_TCP_CONNECTED => handler.handle_tcp_connected(&mut session),
-                coap_event_t::COAP_EVENT_TCP_CLOSED => handler.handle_tcp_closed(&mut session),
-                coap_event_t::COAP_EVENT_TCP_FAILED => handler.handle_tcp_failed(&mut session),
-                coap_event_t::COAP_EVENT_SESSION_CONNECTED => handler.handle_session_connected(&mut session),
-                coap_event_t::COAP_EVENT_SESSION_CLOSED => handler.handle_session_closed(&mut session),
-                coap_event_t::COAP_EVENT_SESSION_FAILED => handler.handle_session_failed(&mut session),
-                coap_event_t::COAP_EVENT_PARTIAL_BLOCK => handler.handle_partial_block(&mut session),
-                coap_event_t::COAP_EVENT_SERVER_SESSION_NEW => {
+                COAP_EVENT_DTLS_CLOSED => handler.handle_dtls_closed(&mut session),
+                COAP_EVENT_DTLS_CONNECTED => handler.handle_dtls_connected(&mut session),
+                COAP_EVENT_DTLS_RENEGOTIATE => handler.handle_dtls_renegotiate(&mut session),
+                COAP_EVENT_DTLS_ERROR => handler.handle_dtls_error(&mut session),
+                COAP_EVENT_TCP_CONNECTED => handler.handle_tcp_connected(&mut session),
+                COAP_EVENT_TCP_CLOSED => handler.handle_tcp_closed(&mut session),
+                COAP_EVENT_TCP_FAILED => handler.handle_tcp_failed(&mut session),
+                COAP_EVENT_SESSION_CONNECTED => handler.handle_session_connected(&mut session),
+                COAP_EVENT_SESSION_CLOSED => handler.handle_session_closed(&mut session),
+                COAP_EVENT_SESSION_FAILED => handler.handle_session_failed(&mut session),
+                COAP_EVENT_PARTIAL_BLOCK => handler.handle_partial_block(&mut session),
+                COAP_EVENT_SERVER_SESSION_NEW => {
                     if let CoapSession::Server(server_session) = &mut session {
                         handler.handle_server_session_new(server_session)
                     } else {
                         panic!("server-side session event fired for non-server-side session");
                     }
                 },
-                coap_event_t::COAP_EVENT_SERVER_SESSION_DEL => {
+                COAP_EVENT_SERVER_SESSION_DEL => {
                     if let CoapSession::Server(server_session) = &mut session {
                         handler.handle_server_session_del(server_session)
                     } else {
@@ -202,14 +204,15 @@ impl<'a> CoapContext<'a> {
         // For server-side sessions: Ensure that server-side session wrappers are either kept in memory or dropped when needed.
         if let CoapSession::Server(serv_sess) = session {
             match event {
-                coap_event_t::COAP_EVENT_SERVER_SESSION_NEW => inner_ref.server_sessions.push(serv_sess),
-                coap_event_t::COAP_EVENT_SERVER_SESSION_DEL => {
-                    std::mem::drop(inner_ref.server_sessions.remove(
-                        inner_ref.server_sessions.iter().position(|v| v.eq(&serv_sess)).expect(
-                            "attempted to remove session wrapper from context that was never associated with it",
-                        ),
-                    ));
-                    serv_sess.drop_exclusively();
+                COAP_EVENT_SERVER_SESSION_NEW => inner_ref.server_sessions.push(serv_sess),
+                COAP_EVENT_SERVER_SESSION_DEL | COAP_EVENT_DTLS_CLOSED => {
+                    let el = inner_ref.server_sessions.iter().position(|v| v.eq(&serv_sess));
+
+                    // Don't do double free. First free is done with COAP_EVENT_DTLS_CLOSED
+                    if let Some(s) = el {
+                        std::mem::drop(inner_ref.server_sessions.remove(s));
+                        serv_sess.drop_exclusively();
+                    }
                 },
                 _ => {},
             }
