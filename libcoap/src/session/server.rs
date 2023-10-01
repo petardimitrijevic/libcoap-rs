@@ -10,8 +10,7 @@
 use std::cell::{Ref, RefMut};
 
 use libcoap_sys::{
-    coap_session_get_app_data, coap_session_get_type, coap_session_reference, coap_session_release,
-    coap_session_set_app_data, coap_session_t, coap_session_type_t,
+    coap_session_get_app_data, coap_session_get_type, coap_session_set_app_data, coap_session_t, coap_session_type_t,
 };
 
 use crate::mem::CoapFfiRcCell;
@@ -77,9 +76,6 @@ impl CoapServerSession<'_> {
         };
         let session_ref = CoapFfiRcCell::new(session_inner);
         coap_session_set_app_data(raw_session, session_ref.create_raw_weak());
-        // Increase libcoap-internal reference counter for raw session so that it doesn't get freed
-        // as long as this CoapServerSession instance exists.
-        coap_session_reference(raw_session);
         CoapServerSession { inner: session_ref }
     }
 
@@ -106,9 +102,6 @@ impl CoapServerSession<'_> {
             coap_session_type_t::COAP_SESSION_TYPE_SERVER | coap_session_type_t::COAP_SESSION_TYPE_HELLO => {
                 let raw_app_data_ptr = coap_session_get_app_data(raw_session);
                 assert!(!raw_app_data_ptr.is_null(), "provided raw session has no app data");
-                // Increase libcoap-internal reference counter for raw session so that it doesn't get freed
-                // as long as this CoapServerSession instance exists.
-                coap_session_reference(raw_session);
                 CoapServerSession {
                     inner: CoapFfiRcCell::clone_raw_rc(raw_app_data_ptr),
                 }
@@ -117,16 +110,6 @@ impl CoapServerSession<'_> {
                 panic!("attempted to create CoapServerSession from raw client session")
             },
             _ => unreachable!("unknown session type"),
-        }
-    }
-}
-
-impl<'a> Drop for CoapServerSession<'a> {
-    fn drop(&mut self) {
-        let raw_session = self.inner.borrow_mut().inner.raw_session;
-        // Decrease libcoap-internal reference counter for raw session so that we don't leak memory.
-        unsafe {
-            coap_session_release(raw_session);
         }
     }
 }
