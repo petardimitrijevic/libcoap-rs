@@ -190,5 +190,6 @@ mod utils;
 
 pub use context::CoapContext;
 pub use event::CoapEventHandler;
+pub use libcoap_sys::coap_log_t;
 pub use resource::{CoapRequestHandler, CoapResource};
-pub use utils::{coap_set_log_level, CoapLogLevel};
+pub use utils::{coap_set_log_level, coap_startup};
