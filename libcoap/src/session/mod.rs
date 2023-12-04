@@ -44,7 +44,7 @@ use crate::{
 
 pub use self::client::CoapClientSession;
 
-pub(self) use self::sealed::{CoapSessionCommonInternal, CoapSessionInnerProvider};
+use self::sealed::{CoapSessionCommonInternal, CoapSessionInnerProvider};
 
 pub use self::server::CoapServerSession;
 

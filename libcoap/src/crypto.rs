@@ -142,7 +142,6 @@ pub(crate) unsafe extern "C" fn dtls_ih_callback(
     let provided_identity = std::slice::from_raw_parts((*hint).s, (*hint).length);
     session
         .provide_raw_key_for_hint(provided_identity)
-        .map(|v| v as *const coap_dtls_cpsk_info_t)
         .unwrap_or(std::ptr::null())
 }
 
@@ -168,10 +167,7 @@ pub(crate) unsafe extern "C" fn dtls_server_sni_callback(
     let context = CoapContext::from_raw(userdata as *mut coap_context_t);
     let sni_value = CStr::from_ptr(sni).to_str();
     if let Ok(sni_value) = sni_value {
-        context
-            .provide_raw_hint_for_sni(sni_value)
-            .map(|v| (v as *const coap_dtls_spsk_info_t))
-            .unwrap_or(std::ptr::null())
+        context.provide_raw_hint_for_sni(sni_value).unwrap_or(std::ptr::null())
     } else {
         std::ptr::null()
     }

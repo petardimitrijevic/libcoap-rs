@@ -137,7 +137,7 @@ impl CoapClientSession<'_> {
         // coap_new_client_session().
         Ok(unsafe {
             CoapClientSession::new(
-                session as *mut coap_session_t,
+                session,
                 #[cfg(feature = "dtls")]
                 None,
                 #[cfg(feature = "dtls")]
@@ -171,7 +171,7 @@ impl CoapClientSession<'_> {
         // coap_new_client_session().
         Ok(unsafe {
             CoapClientSession::new(
-                session as *mut coap_session_t,
+                session,
                 #[cfg(feature = "dtls")]
                 None,
                 #[cfg(feature = "dtls")]

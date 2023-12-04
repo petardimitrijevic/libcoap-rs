@@ -50,8 +50,8 @@ impl CoapRequestUri {
     pub fn new_request_uri(uri: CoapUri) -> Result<CoapRequestUri, OptionValueError> {
         if uri
             .path_iter()
-            .unwrap_or(vec![].iter())
-            .chain(uri.query_iter().unwrap_or(vec![].iter()))
+            .unwrap_or([].iter())
+            .chain(uri.query_iter().unwrap_or([].iter()))
             .any(|x| x.len() > MAX_URI_SEGMENT_LENGTH)
         {
             return Err(OptionValueError::TooLong);

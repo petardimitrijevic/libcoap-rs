@@ -622,7 +622,8 @@ impl CoapContext<'_> {
     /// # Safety
     /// Returned pointer should only be used if the context is borrowed.
     /// Calling this function may override previous returned values of this function.
-    #[cfg(all(feature = "dtls"))]
+    #[allow(unused)]
+    #[cfg(feature = "dtls")]
     pub(crate) unsafe fn provide_raw_hint_for_sni(&self, sni: &str) -> Option<*const coap_dtls_spsk_info_t> {
         let inner_ref = &mut *self.inner.borrow_mut();
         match inner_ref.crypto_provider.as_mut().map(|v| v.provide_hint_for_sni(sni)) {
