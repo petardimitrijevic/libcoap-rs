@@ -246,7 +246,7 @@ fn main() {
             format!(
                 "{}:{}",
                 dst.join("lib").join("pkgconfig").to_str().unwrap(),
-                orig_pkg_config.as_ref().map(String::clone).unwrap_or_else(String::new)
+                orig_pkg_config.as_ref().map(String::clone).unwrap_or_default()
             ),
         );
         env::set_current_dir(current_dir_backup).expect("unable to switch back to source dir");
@@ -298,7 +298,7 @@ fn main() {
         // the included headers seem to come from our built version.
         // Should be fine though, as we already printed `cargo:rerun-if-changed=src/libcoap/` at the
         // start of the file.
-        bindgen_builder = bindgen_builder.parse_callbacks(Box::new(bindgen::CargoCallbacks));
+        bindgen_builder = bindgen_builder.parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
     }
     let bindings = bindgen_builder.generate().unwrap();
 
