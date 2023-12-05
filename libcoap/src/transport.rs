@@ -58,9 +58,9 @@ impl CoapEndpoint {
     }
 }
 
-impl Drop for CoapEndpoint {
-    fn drop(&mut self) {
-        // SAFETY: Raw endpoint is guaranteed to exist for as long as the container exists.
-        unsafe { coap_free_endpoint(self.raw_endpoint) }
-    }
-}
+// impl Drop for CoapEndpoint {
+//     fn drop(&mut self) {
+//         // SAFETY: Raw endpoint is guaranteed to exist for as long as the container exists.
+//         unsafe { coap_free_endpoint(self.raw_endpoint) }
+//     }
+// }
